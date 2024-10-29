@@ -393,7 +393,7 @@ class EndQuizOptionsView(discord.ui.View):
             pdf.cell(0, 10, f"Answer: {q['answer']}", ln=True)
             pdf.cell(0, 10, "", ln=True)  # Add a blank line between questions
 
-        pdf_output = "quiz_output.pdf"
+        pdf_output = "QuizBot.pdf"
         pdf.output(pdf_output)
 
         with open(pdf_output, "rb") as file:
@@ -414,4 +414,3 @@ async def quiz(ctx):
 
 # Run the bot
 bot.run(TOKEN)
-
