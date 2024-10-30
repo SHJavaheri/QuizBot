@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fpdf import FPDF
 from quiz_manager import QuizManager
 from openai import OpenAI
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -35,10 +36,8 @@ def generate_hint(question_text):
     return hint if hint else "No hint available."
 
 
-
-
 class StartQuizView(discord.ui.View):
-    """Initial view showing only the 'Start Quiz' button."""
+    """Initial view showing the 'Start Quiz' and 'Take this to Threads' buttons."""
 
     def __init__(self, bot, quiz_manager):
         super().__init__()
@@ -51,8 +50,28 @@ class StartQuizView(discord.ui.View):
             await interaction.response.send_message("A quiz is already active. Use 'End Quiz' to finalize it first.")
         else:
             self.quiz_manager.start_new_quiz()
-            await interaction.response.send_message("New quiz session started! Use 'Add Question' to add questions.",
-                                                    view=QuestionTypeView(self.bot, self.quiz_manager))
+            await interaction.response.send_message(
+                "New quiz session started! Use 'Add Question' to add questions.",
+                view=QuestionTypeView(self.bot, self.quiz_manager)
+            )
+
+    @discord.ui.button(label="Take this to Threads", style=discord.ButtonStyle.blurple, custom_id="take_to_threads")
+    async def take_to_threads_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Defer the interaction to prevent "interaction failed" message
+        await interaction.response.defer()
+
+        # Create a thread with the user's name
+        thread = await interaction.channel.create_thread(
+            name=f"{interaction.user.display_name}'s Quiz Thread",
+            type=discord.ChannelType.public_thread,
+            reason="Starting quiz in a thread"
+        )
+        await thread.send(
+            f"{interaction.user.mention} Ready to create your quiz in this thread! Use the buttons to start.")
+
+        # Redirect the quiz creation to the thread
+        await thread.send("New quiz session started! Use 'Add Question' to add questions.",
+                          view=QuestionTypeView(self.bot, self.quiz_manager))
 
 
 class QuestionTypeView(discord.ui.View):
@@ -400,10 +419,28 @@ class EndQuizOptionsView(discord.ui.View):
             await interaction.response.send_message("Here is your quiz in PDF format:", file=discord.File(file, pdf_output))
 
 
-
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+
+    # Dictionary to map each server (guild) ID to a specific channel ID
+    startup_channels = {
+        785377434022314005: 1300861955623358494,  # Replace with actual server and channel IDs
+        799860863732416532: 1300729764843356222
+        # Add more servers and channels as needed
+    }
+
+    # Loop through each server and its specified channel
+"""    for guild_id, channel_id in startup_channels.items():
+        guild = bot.get_guild(guild_id)  # Fetch the guild
+        if guild:
+            channel = guild.get_channel(channel_id)  # Fetch the specific channel
+            if channel:
+                await channel.send("Ready to make a quiz for you! Just type `!quiz` to start!")
+            else:
+                print(f"Channel ID {channel_id} not found in guild {guild.name}")
+        else:
+            print(f"Guild ID {guild_id} not found")"""
 
 
 @bot.command(name="quiz")
@@ -411,6 +448,28 @@ async def quiz(ctx):
     view = StartQuizView(bot, quiz_manager)
     await ctx.send("Welcome to the Quiz Bot! Use the buttons below to start the quiz:", view=view)
 
+
+@bot.command(name="closethread")
+async def close_thread(ctx):
+    if isinstance(ctx.channel, discord.Thread):
+        # Inform the user of closure before deleting the thread
+        await ctx.send(f"{ctx.author.mention} Thread will be closed in 5 seconds.", delete_after=5)
+
+        # Wait for 5 seconds before deleting the thread
+        await asyncio.sleep(5)
+        await ctx.channel.delete()
+    else:
+        await ctx.send("This command can only be used in a thread.", delete_after=5)
+
+
+@bot.command(name="quizhelp")
+async def help_command(ctx):
+    # Ping the user and send instructions
+    await ctx.send(f"{ctx.author.mention}\n How to make a quiz:\n"
+                   "1. Type `!quiz`\n"
+                   "2. Follow Prompts (Ex. Start Quiz, Multiple Choice, etc.)\n"
+                   "3. Take Quiz!\n"
+                   "4. Optionally Print the Entire Quiz as a PDF File!")
 
 # Run the bot
 bot.run(TOKEN)
